@@ -1,0 +1,20 @@
+# New Relic OTLP overlay — rebuilds goclaw with OTel support and exports
+# traces/spans to New Relic (US datacenter) via OTLP/gRPC over TLS.
+#
+# Requires NEW_RELIC_LICENSE_KEY in .env (Ingest - License key, NOT the User API key).
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.postgres.yml -f docker-compose.newrelic.yml up -d --build
+services:
+  goclaw:
+    build:
+      args:
+        ENABLE_OTEL: "true"
+    environment:
+      - GOCLAW_TELEMETRY_ENABLED=true
+      - GOCLAW_TELEMETRY_ENDPOINT=otlp.nr-data.net:4317
+      - GOCLAW_TELEMETRY_PROTOCOL=grpc
+      - GOCLAW_TELEMETRY_SERVICE_NAME=goclaw-gateway
+      # api-key header injected via the OTel SDK standard env var (goclaw leaves
+      # Headers empty, so the SDK reads this). Key comes from .env.
+      - OTEL_EXPORTER_OTLP_HEADERS=api-key=${NEW_RELIC_LICENSE_KEY:?set NEW_RELIC_LICENSE_KEY in .env}
