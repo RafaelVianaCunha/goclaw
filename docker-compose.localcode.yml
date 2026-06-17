@@ -1,0 +1,17 @@
+# Local code overlay — gives the agent read/write access to the host's
+# ~/workspace projects via a bind mount, plus group membership so the
+# goclaw process (uid 1000) can write files owned by group v1000993 (gid 1001).
+#
+# Pair with system_configs key `allowed_paths` = ["/projects"] so the
+# workspace-restricted filesystem tool is allowed to reach this path.
+#
+# Usage (full stack):
+#   docker compose -f docker-compose.yml -f docker-compose.postgres.yml \
+#     -f docker-compose.newrelic.yml -f docker-compose.browser.yml \
+#     -f docker-compose.localcode.yml up -d
+services:
+  goclaw:
+    volumes:
+      - /home/v1000993/workspace:/projects
+    group_add:
+      - "1001"

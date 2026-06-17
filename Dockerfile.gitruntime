@@ -1,0 +1,9 @@
+# goclaw runtime + git/ssh so the error-analyst agent can clone govoll repos.
+# Thin layer on top of the published image (no full rebuild): adds git,
+# the ssh client, and pins Bitbucket's host keys so SSH clone works headless.
+FROM ghcr.io/nextlevelbuilder/goclaw:latest
+
+# Runs as root in this image (Config.User is empty) — no USER switch needed.
+RUN apk add --no-cache git openssh-client \
+ && ssh-keyscan -t rsa,ecdsa,ed25519 bitbucket.org >> /etc/ssh/ssh_known_hosts \
+ && git --version && ssh -V

@@ -1,0 +1,20 @@
+# Overlay: build goclaw with git+ssh+bitbucket host keys baked in (persistent),
+# and turn on debug logging so we can see the secure-CLI credential lookup
+# (credential_user_id) for the error-analyst agent's git clone.
+#
+# Usage (include AFTER all your other -f files):
+#   docker compose -f docker-compose.yml -f docker-compose.postgres.yml \
+#     -f docker-compose.newrelic.yml -f docker-compose.browser.yml \
+#     -f docker-compose.localcode.yml -f docker-compose.gitruntime.yml \
+#     build goclaw
+#   docker compose <same -f set> up -d goclaw
+services:
+  goclaw:
+    build:
+      context: ${GOCLAW_DIR:-.}
+      dockerfile: Dockerfile.gitruntime
+    image: goclaw-gitruntime:local
+    # debug logging was only for diagnosing the credential lookup — back to info (default).
+    # Re-enable by uncommenting if you need to inspect secure-CLI lookups again.
+    # environment:
+    #   - GOCLAW_LOG_LEVEL=debug
