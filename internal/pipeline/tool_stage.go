@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"sync"
 
@@ -90,7 +91,15 @@ func (s *ToolStage) Execute(ctx context.Context, state *RunState) error {
 
 		msgs, err := s.deps.ExecuteToolCall(ctx, state, tc)
 		if err != nil {
-			return fmt.Errorf("execute tool %s: %w", tc.Name, err)
+			// Tool execution failed. Emit an error tool result so the assistant's
+			// tool_calls message stays paired — OpenAI-compatible providers reject a
+			// message whose tool_call_ids lack tool responses (HTTP 400). Record the
+			// failure and continue rather than aborting the whole run.
+			slog.Warn("pipeline.tool.exec_failed",
+				"tool", tc.Name, "tool_call_id", tc.ID, "error", err)
+			state.Messages.AppendPending(toolErrorMessage(tc.ID, tc.Name, err))
+			state.Tool.TotalToolCalls++
+			continue
 		}
 		for _, msg := range msgs {
 			state.Messages.AppendPending(msg)
@@ -170,6 +179,18 @@ func toolCallTimeMs(tc providers.ToolCall) int {
 	return 0
 }
 
+// toolErrorMessage builds a tool-result message for a tool_call whose execution
+// failed, so every tool_call_id in an assistant message gets a paired response.
+// Without it, OpenAI-compatible providers reject the next request with
+// "tool_call_ids did not have response messages" (HTTP 400).
+func toolErrorMessage(toolCallID, toolName string, err error) providers.Message {
+	return providers.Message{
+		Role:       "tool",
+		ToolCallID: toolCallID,
+		Content:    fmt.Sprintf("Tool %q failed to execute: %v", toolName, err),
+	}
+}
+
 // executeParallel runs tool I/O concurrently, then processes results sequentially.
 func (s *ToolStage) executeParallel(ctx context.Context, state *RunState, toolCalls []providers.ToolCall) error {
 	type rawResult struct {
@@ -195,7 +216,15 @@ func (s *ToolStage) executeParallel(ctx context.Context, state *RunState, toolCa
 	// Phase 2: sequential state mutation (safe, deterministic order)
 	for _, r := range results {
 		if r.err != nil {
-			return fmt.Errorf("execute tool %s: %w", r.tc.Name, r.err)
+			// Tool I/O failed. Still answer this tool_call_id with an error result so
+			// the assistant's tool_calls message stays paired — an orphaned id makes
+			// OpenAI-compatible providers 400 on the next request. Record and continue
+			// so the rest of the batch is answered too (don't abort the whole run).
+			slog.Warn("pipeline.tool.parallel_exec_failed",
+				"tool", r.tc.Name, "tool_call_id", r.tc.ID, "error", r.err)
+			state.Messages.AppendPending(toolErrorMessage(r.tc.ID, r.tc.Name, r.err))
+			state.Tool.TotalToolCalls++
+			continue
 		}
 		processed := s.deps.ProcessToolResult(ctx, state, r.tc, r.msg, r.rawData)
 		for _, msg := range processed {

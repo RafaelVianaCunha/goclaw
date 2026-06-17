@@ -52,20 +52,22 @@ func (c *Channel) handleAppMention(ev *slackevents.AppMentionEvent) {
 		return
 	}
 
-	localKey := channelID
 	threadTS := ev.ThreadTimeStamp
-	if threadTS != "" {
-		localKey = fmt.Sprintf("%s:thread:%s", channelID, threadTS)
-	}
-
-	slog.Debug("slack app_mention received",
-		"sender_id", senderID, "channel_id", channelID,
-		"preview", channels.Truncate(content, 50))
-
+	// Effective thread used for BOTH reply routing AND session isolation: the
+	// parent thread if this is a threaded reply, else this message's own ts (the
+	// bot replies in a new thread under it). Scoping the session local_key by this
+	// makes a top-level @mention and its threaded follow-ups share ONE session,
+	// instead of the top-level message landing in the noisy per-channel session
+	// (which grows huge and gets pruned, making the bot "lose" context).
 	replyThreadTS := threadTS
 	if replyThreadTS == "" {
 		replyThreadTS = ev.TimeStamp
 	}
+	localKey := fmt.Sprintf("%s:thread:%s", channelID, replyThreadTS)
+
+	slog.Debug("slack app_mention received",
+		"sender_id", senderID, "channel_id", channelID,
+		"preview", channels.Truncate(content, 50))
 
 	placeholderOpts := []slackapi.MsgOption{
 		slackapi.MsgOptionText("Thinking...", false),

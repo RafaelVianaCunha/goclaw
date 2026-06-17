@@ -82,6 +82,24 @@ reset: version-file
 	$(COMPOSE) down -v
 	GOCLAW_VERSION=$(VERSION) $(COMPOSE) up -d --pull always
 
+# ── Watson / error-analyst stack ──
+# Convenience build for the running stack (yml + postgres + newrelic + browser +
+# localcode + git/ssh runtime). Avoids retyping the long `docker compose -f ...` chain.
+#   make watson-rebuild   → compile source fixes, layer git/ssh, recreate, verify git
+#   make watson-logs      → tail goclaw logs
+WATSON_COMPOSE = docker compose -f docker-compose.yml -f docker-compose.postgres.yml -f docker-compose.newrelic.yml -f docker-compose.browser.yml -f docker-compose.localcode.yml
+WATSON_COMPOSE_GIT = $(WATSON_COMPOSE) -f docker-compose.gitruntime.yml
+
+.PHONY: watson-rebuild watson-logs
+watson-rebuild:
+	$(WATSON_COMPOSE) build goclaw
+	$(WATSON_COMPOSE_GIT) build goclaw
+	$(WATSON_COMPOSE_GIT) up -d goclaw
+	docker exec goclaw-goclaw-1 git --version
+
+watson-logs:
+	$(WATSON_COMPOSE_GIT) logs -f goclaw
+
 test:
 	go test -race -timeout=5m ./...
 

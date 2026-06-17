@@ -96,8 +96,11 @@ func isExternalChannel(channelType string) bool {
 		channels.TypeWhatsApp,
 		channels.TypeZaloOA,
 		channels.TypeZaloPersonal,
-		channels.TypePancake,
-		channels.TypeSlack:
+		channels.TypePancake:
+		// NOTE: Slack is intentionally NOT suppressed — it's used here as an
+		// internal team tool, and formatAgentError already returns sanitized,
+		// user-friendly messages (never raw technical errors). Showing
+		// "⚠️ ... try again / use /new" beats a silent deleted placeholder.
 		return true
 	}
 	return false
